@@ -112,7 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vst3-${{ matrix.os }}
-          path: package/*
+          path: ${{ env.PROJECT_NAME }}/package/*
 
   attach-release:
     needs: build
