@@ -1,0 +1,3 @@
+[submodule "Spektral"]
+	path = Spektral
+	url = https://github.com/KaixoCode/Spektral
