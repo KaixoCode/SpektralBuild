@@ -71,14 +71,23 @@ jobs:
 
       - name: Build
         working-directory: ./${{ env.PROJECT_NAME }}
-        run: |
+        run: >
+          cmake --build build --target ${{ env.PROJECT_NAME }} --config ${{ matrix.build_type }}
+
+      - name: Build VST3
+        working-directory: ./${{ env.PROJECT_NAME }}
+        run: >
           cmake --build build --target ${{ env.PROJECT_NAME }}_VST3 --config ${{ matrix.build_type }}
+
+      - name: Build Standalone
+        working-directory: ./${{ env.PROJECT_NAME }}
+        run: >
           cmake --build build --target ${{ env.PROJECT_NAME }}_Standalone --config ${{ matrix.build_type }}
 
-      - name: Build (MacOS)
+      - name: Build AU (MacOS)
         working-directory: ./${{ env.PROJECT_NAME }}
         if: matrix.os == 'macos-latest'
-        run: |
+        run: >
           cmake --build build --target ${{ env.PROJECT_NAME }}_AU --config ${{ matrix.build_type }}
 
       - name: Package (Windows)
