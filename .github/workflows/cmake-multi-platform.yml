@@ -61,7 +61,7 @@ jobs:
 
       - name: Configure CMake
         working-directory: ./${{ env.PROJECT_NAME }}
-        run: >
+        run: |
           cmake -B build
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
@@ -71,14 +71,14 @@ jobs:
 
       - name: Build
         working-directory: ./${{ env.PROJECT_NAME }}
-        run: >
+        run: |
           cmake --build build --target ${{ env.PROJECT_NAME }}_VST3 --config ${{ matrix.build_type }}
           cmake --build build --target ${{ env.PROJECT_NAME }}_Standalone --config ${{ matrix.build_type }}
 
       - name: Build (MacOS)
         working-directory: ./${{ env.PROJECT_NAME }}
         if: matrix.os == 'macos-latest'
-        run: >
+        run: |
           cmake --build build --target ${{ env.PROJECT_NAME }}_AU --config ${{ matrix.build_type }}
 
       - name: Package (Windows)
