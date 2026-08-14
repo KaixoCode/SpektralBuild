@@ -68,7 +68,6 @@ jobs:
           -DVERSION="${{ github.event.inputs.tag }}"
           -DVERSION_TYPE="${{ github.event.inputs.version_type }}"
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -S ${{ github.workspace }}
 
       - name: Build
         working-directory: ./${{ env.PROJECT_NAME }}
