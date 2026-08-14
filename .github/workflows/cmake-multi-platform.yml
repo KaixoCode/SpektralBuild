@@ -1,4 +1,4 @@
-name: CMake VST3 Build and Release (Windows + macOS)
+name: CMake Build and Release (Windows + macOS)
 
 on:
   workflow_dispatch:
@@ -68,38 +68,84 @@ jobs:
           -DVERSION="${{ github.event.inputs.tag }}"
           -DVERSION_TYPE="${{ github.event.inputs.version_type }}"
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -S ${{ github.workspace }}
 
       - name: Build
         working-directory: ./${{ env.PROJECT_NAME }}
-        run: cmake --build build --target ${{ env.PROJECT_NAME }}_VST3 --config ${{ matrix.build_type }}
+        run: >
+          cmake --build build --target ${{ env.PROJECT_NAME }}_VST3 --config ${{ matrix.build_type }}
+          cmake --build build --target ${{ env.PROJECT_NAME }}_Standalone --config ${{ matrix.build_type }}
 
-      - name: Package VST3
+      - name: Build (MacOS)
         working-directory: ./${{ env.PROJECT_NAME }}
+        if: matrix.os == 'macos-latest'
+        run: >
+          cmake --build build --target ${{ env.PROJECT_NAME }}_AU --config ${{ matrix.build_type }}
+
+      - name: Package (Windows)
+        working-directory: ./${{ env.PROJECT_NAME }}
+        if: matrix.os == 'windows-latest'
         run: |
           mkdir -p package
           cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/VST3/${{ env.PROJECT_NAME }}.vst3 package/
+          cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/Standalone/${{ env.PROJECT_NAME }}.exe package/
         shell: bash
 
-      - name: Sign and notarize VST3 (macOS)
+      - name: Package (MacOS)
+        working-directory: ./${{ env.PROJECT_NAME }}
+        if: matrix.os == 'macos-latest'
+        run: |
+          mkdir -p package
+          cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/VST3/${{ env.PROJECT_NAME }}.vst3 package/
+          cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/Standalone/${{ env.PROJECT_NAME }}.app package/
+          cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/AU/${{ env.PROJECT_NAME }}.component package/
+        shell: bash
+
+      - name: Sign and notarize (macOS)
         working-directory: ./${{ env.PROJECT_NAME }}
         if: matrix.os == 'macos-latest'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DEVELOPER_ID_NAME: ${{ secrets.DEVELOPER_ID_NAME }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           VST3_PATH="package/${{ env.PROJECT_NAME }}.vst3"
+          AU_PATH="package/${{ env.PROJECT_NAME }}.component"
+          STANDALONE_PATH="package/${{ env.PROJECT_NAME }}.app"
 
           echo "Signing..."
           codesign --force --deep --options runtime \
-            --sign "Developer ID Application: Jeroen Zwiers (7ZMF3DJ6GK)" \
+            --sign "Developer ID Application: ${{ env.DEVELOPER_ID_NAME }} (${{ env.APPLE_TEAM_ID }})" \
             "$VST3_PATH"
 
+          codesign --force --deep --options runtime \
+            --sign "Developer ID Application: ${{ env.DEVELOPER_ID_NAME }} (${{ env.APPLE_TEAM_ID }})" \
+            "$AU_PATH"
+
+          codesign --force --deep --options runtime \
+            --sign "Developer ID Application: ${{ env.DEVELOPER_ID_NAME }} (${{ env.APPLE_TEAM_ID }})" \
+            "$STANDALONE_PATH"
+
           echo "Zipping for notarization..."
-          ditto -c -k --keepParent "$VST3_PATH" ${{ env.PROJECT_NAME }}.zip
+          ditto -c -k --keepParent "$VST3_PATH" ${{ env.PROJECT_NAME }}-vst3.zip
+          ditto -c -k --keepParent "$AU_PATH" ${{ env.PROJECT_NAME }}-au.zip
+          ditto -c -k --keepParent "$STANDALONE_PATH" ${{ env.PROJECT_NAME }}-standalone.zip
 
           echo "Submitting for notarization..."
-          xcrun notarytool submit ${{ env.PROJECT_NAME }}.zip \
+          xcrun notarytool submit ${{ env.PROJECT_NAME }}-vst3.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+          xcrun notarytool submit ${{ env.PROJECT_NAME }}-au.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+          xcrun notarytool submit ${{ env.PROJECT_NAME }}-standalone.zip \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_PASSWORD" \
@@ -107,11 +153,13 @@ jobs:
 
           echo "Stapling..."
           xcrun stapler staple "$VST3_PATH"
+          xcrun stapler staple "$AU_PATH"
+          xcrun stapler staple "$STANDALONE_PATH"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vst3-${{ matrix.os }}
+          name: plugin-${{ matrix.os }}
           path: ${{ env.PROJECT_NAME }}/package/*
 
   attach-release:
@@ -125,31 +173,42 @@ jobs:
         with:
           path: ./dist
 
-      # Zip all VST3 folders
+      # Zip all folders
       - name: Zip VST3 folders
         shell: bash
         run: |
           mkdir -p zips
           (
-            cd "./dist/vst3-windows-latest" || exit 1
+            cd "./dist/plugin-windows-latest" || exit 1
             zip -r "../../zips/${{ env.PROJECT_NAME }}-vst3-windows-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.vst3"
           )
           (
-            cd "./dist/vst3-macos-latest" || exit 1
+            cd "./dist/plugin-windows-latest" || exit 1
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-windows-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.exe"
+          )
+          (
+            cd "./dist/plugin-macos-latest" || exit 1
             zip -r "../../zips/${{ env.PROJECT_NAME }}-vst3-macos-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.vst3"
+          )
+          (
+            cd "./dist/plugin-macos-latest" || exit 1
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-au-macos-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.component"
+          )
+          (
+            cd "./dist/plugin-macos-latest" || exit 1
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-macos-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.app"
           )
    
       # Create the release
       - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}
-          release_name: Release ${{ github.event.inputs.tag }}
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}
+          RELEASE_NAME: Release ${{ github.event.inputs.tag }}
+        run:
+          gh release create "$TAG_NAME" \
+              --repo="$GITHUB_REPOSITORY" \
+              --title="$RELEASE_NAME"
 
       # Upload zip files to the release
       - name: Upload release assets
