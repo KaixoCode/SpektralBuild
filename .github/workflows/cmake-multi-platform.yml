@@ -188,23 +188,23 @@ jobs:
           mkdir -p zips
           (
             cd "./dist/plugin-windows-latest" || exit 1
-            zip -r "../../zips/${{ env.PROJECT_NAME }}-vst3-windows-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.vst3"
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-vst3-windows-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.vst3"
           )
           (
             cd "./dist/plugin-windows-latest" || exit 1
-            zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-windows-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.exe"
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-windows-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.exe"
           )
           (
             cd "./dist/plugin-macos-latest" || exit 1
-            zip -r "../../zips/${{ env.PROJECT_NAME }}-vst3-macos-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.vst3"
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-vst3-macos-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.vst3"
           )
           (
             cd "./dist/plugin-macos-latest" || exit 1
-            zip -r "../../zips/${{ env.PROJECT_NAME }}-au-macos-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.component"
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-au-macos-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.component"
           )
           (
             cd "./dist/plugin-macos-latest" || exit 1
-            zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-macos-${{ github.event.inputs.tag }}.zip" "${{ env.PROJECT_NAME }}.app"
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-macos-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.app"
           )
    
       # Create the release
