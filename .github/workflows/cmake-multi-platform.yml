@@ -170,8 +170,97 @@ jobs:
           name: plugin-${{ matrix.os }}
           path: ${{ env.PROJECT_NAME }}/package/*
 
+  build-linux:
+    # Ubuntu 20.04 gives us an intentionally old glibc/libstdc++ baseline,
+    # improving compatibility with modern Debian/Ubuntu/Fedora/openSUSE.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Build Linux VST3 (Ubuntu 20.04 compatibility baseline)
+        working-directory: ./${{ env.PROJECT_NAME }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          docker pull ubuntu:20.04
+
+          docker run --rm \
+            --network host \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e VERSION="${{ github.event.inputs.tag }}" \
+            -e VERSION_TYPE="${{ github.event.inputs.version_type }}" \
+            -v "$GITHUB_WORKSPACE/${{ env.PROJECT_NAME }}:/src" \
+            -w /src \
+            ubuntu:20.04 \
+            bash -lc '
+              set -euxo pipefail
+
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                ca-certificates \
+                build-essential \
+                cmake \
+                ninja-build \
+                pkg-config \
+                git \
+                python3 \
+                libasound2-dev \
+                libfontconfig1-dev \
+                libfreetype6-dev \
+                libgl1-mesa-dev \
+                libglu1-mesa-dev \
+                libx11-dev \
+                libx11-xcb-dev \
+                libxcomposite-dev \
+                libxcursor-dev \
+                libxext-dev \
+                libxfixes-dev \
+                libxi-dev \
+                libxinerama-dev \
+                libxrandr-dev \
+                libxrender-dev \
+                libxcb1-dev
+
+              cmake -B build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_COMPILER=gcc \
+                -DCMAKE_CXX_COMPILER=g++ \
+                -DVERSION="$VERSION" \
+                -DVERSION_TYPE="$VERSION_TYPE"
+
+              cmake --build build --target "${{ env.PROJECT_NAME }}_VST3" --config Release
+
+              mkdir -p package
+              cp -R \
+                "build/core/${{ env.PROJECT_NAME }}_artefacts/Release/VST3/${{ env.PROJECT_NAME }}.vst3" \
+                package/
+            '
+
+      - name: Verify Linux VST3
+        working-directory: ./${{ env.PROJECT_NAME }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -d "package/${{ env.PROJECT_NAME }}.vst3"
+          test -f "package/${{ env.PROJECT_NAME }}.vst3/Contents/x86_64-linux/${{ env.PROJECT_NAME }}.so"
+
+          echo "Linux VST3 dependencies:"
+          ldd "package/${{ env.PROJECT_NAME }}.vst3/Contents/x86_64-linux/${{ env.PROJECT_NAME }}.so" || true
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-linux
+          path: ${{ env.PROJECT_NAME }}/package/${{ env.PROJECT_NAME }}.vst3
+          
   attach-release:
-    needs: build
+    needs: [build, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -205,6 +294,10 @@ jobs:
           (
             cd "./dist/plugin-macos-latest" || exit 1
             zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-macos-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.app"
+          )
+          (
+            cd "./dist/plugin-linux" || exit 1
+            zip -r "../../zips/${{ env.PROJECT_NAME }}-vst3-linux-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.vst3"
           )
    
       # Create the release
