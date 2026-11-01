@@ -14,6 +14,7 @@ on:
 
 env:
   PROJECT_NAME: Spektral
+  FX_PROJECT_NAME: SpektralFX
 
 permissions:
   contents: write
@@ -90,6 +91,22 @@ jobs:
         run: >
           cmake --build build --target ${{ env.PROJECT_NAME }}_AU --config ${{ matrix.build_type }}
 
+      - name: Build FX
+        working-directory: ./${{ env.PROJECT_NAME }}
+        run: >
+          cmake --build build --target ${{ env.FX_PROJECT_NAME }} --config ${{ matrix.build_type }}
+
+      - name: Build VST3 FX
+        working-directory: ./${{ env.PROJECT_NAME }}
+        run: >
+          cmake --build build --target ${{ env.FX_PROJECT_NAME }}_VST3 --config ${{ matrix.build_type }}
+
+      - name: Build AU FX (MacOS)
+        working-directory: ./${{ env.PROJECT_NAME }}
+        if: matrix.os == 'macos-latest'
+        run: >
+          cmake --build build --target ${{ env.FX_PROJECT_NAME }}_AU --config ${{ matrix.build_type }}
+
       - name: Package (Windows)
         working-directory: ./${{ env.PROJECT_NAME }}
         if: matrix.os == 'windows-latest'
@@ -97,6 +114,7 @@ jobs:
           mkdir -p package
           cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/VST3/${{ env.PROJECT_NAME }}.vst3 package/
           cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/Standalone/${{ env.PROJECT_NAME }}.exe package/
+          cp -R build/core/${{ env.FX_PROJECT_NAME }}_artefacts/Release/VST3/${{ env.FX_PROJECT_NAME }}.vst3 package/
         shell: bash
 
       - name: Package (MacOS)
@@ -107,6 +125,8 @@ jobs:
           cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/VST3/${{ env.PROJECT_NAME }}.vst3 package/
           cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/Standalone/${{ env.PROJECT_NAME }}.app package/
           cp -R build/core/${{ env.PROJECT_NAME }}_artefacts/Release/AU/${{ env.PROJECT_NAME }}.component package/
+          cp -R build/core/${{ env.FX_PROJECT_NAME }}_artefacts/Release/VST3/${{ env.FX_PROJECT_NAME }}.vst3 package/
+          cp -R build/core/${{ env.FX_PROJECT_NAME }}_artefacts/Release/AU/${{ env.FX_PROJECT_NAME }}.component package/
         shell: bash
 
       - name: Sign and notarize (macOS)
@@ -121,6 +141,8 @@ jobs:
           VST3_PATH="package/${{ env.PROJECT_NAME }}.vst3"
           AU_PATH="package/${{ env.PROJECT_NAME }}.component"
           STANDALONE_PATH="package/${{ env.PROJECT_NAME }}.app"
+          VST3_FX_PATH="package/${{ env.FX_PROJECT_NAME }}.vst3"
+          AU_FX_PATH="package/${{ env.FX_PROJECT_NAME }}.component"
 
           echo "Signing..."
           codesign --force --deep --options runtime \
@@ -135,10 +157,20 @@ jobs:
             --sign "Developer ID Application: ${{ env.DEVELOPER_ID_NAME }} (${{ env.APPLE_TEAM_ID }})" \
             "$STANDALONE_PATH"
 
+          codesign --force --deep --options runtime \
+            --sign "Developer ID Application: ${{ env.DEVELOPER_ID_NAME }} (${{ env.APPLE_TEAM_ID }})" \
+            "$VST3_FX_PATH"
+
+          codesign --force --deep --options runtime \
+            --sign "Developer ID Application: ${{ env.DEVELOPER_ID_NAME }} (${{ env.APPLE_TEAM_ID }})" \
+            "$AU_FX_PATH"
+
           echo "Zipping for notarization..."
           ditto -c -k --keepParent "$VST3_PATH" ${{ env.PROJECT_NAME }}-vst3.zip
           ditto -c -k --keepParent "$AU_PATH" ${{ env.PROJECT_NAME }}-au.zip
           ditto -c -k --keepParent "$STANDALONE_PATH" ${{ env.PROJECT_NAME }}-standalone.zip
+          ditto -c -k --keepParent "$VST3_FX_PATH" ${{ env.FX_PROJECT_NAME }}-vst3.zip
+          ditto -c -k --keepParent "$AU_FX_PATH" ${{ env.FX_PROJECT_NAME }}-au.zip
 
           echo "Submitting for notarization..."
           xcrun notarytool submit ${{ env.PROJECT_NAME }}-vst3.zip \
@@ -159,10 +191,24 @@ jobs:
             --password "$APPLE_APP_PASSWORD" \
             --wait
 
+          xcrun notarytool submit ${{ env.FX_PROJECT_NAME }}-vst3.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+          xcrun notarytool submit ${{ env.FX_PROJECT_NAME }}-au.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
           echo "Stapling..."
           xcrun stapler staple "$VST3_PATH"
           xcrun stapler staple "$AU_PATH"
           xcrun stapler staple "$STANDALONE_PATH"
+          xcrun stapler staple "$VST3_FX_PATH"
+          xcrun stapler staple "$AU_FX_PATH"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -205,6 +251,18 @@ jobs:
           (
             cd "./dist/plugin-macos-latest" || exit 1
             zip -r "../../zips/${{ env.PROJECT_NAME }}-standalone-macos-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.PROJECT_NAME }}.app"
+          )
+          (
+            cd "./dist/plugin-windows-latest" || exit 1
+            zip -r "../../zips/${{ env.FX_PROJECT_NAME }}-vst3-windows-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.FX_PROJECT_NAME }}.vst3"
+          )
+          (
+            cd "./dist/plugin-macos-latest" || exit 1
+            zip -r "../../zips/${{ env.FX_PROJECT_NAME }}-vst3-macos-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.FX_PROJECT_NAME }}.vst3"
+          )
+          (
+            cd "./dist/plugin-macos-latest" || exit 1
+            zip -r "../../zips/${{ env.FX_PROJECT_NAME }}-au-macos-${{ github.event.inputs.tag }}${{ github.event.inputs.version_type == 'DEMO' && '-demo' || '' }}.zip" "${{ env.FX_PROJECT_NAME }}.component"
           )
    
       # Create the release
